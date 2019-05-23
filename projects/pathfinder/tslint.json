@@ -1,0 +1,30 @@
+{
+  "extends": ["angular-tslint-rules"],
+  "rules": {
+      "only-arrow-functions": false,
+      "unnecessary-constructor": false,
+      "no-empty": false,
+      "member-access": false,
+      "prefer-const": false,
+      "one-line": false,
+      "no-invalid-this": false,
+      "no-inferrable-types": false,
+      "experimentalDecorators": false,
+      "max-line-length": false,
+      "max-file-line-count": false,
+      "no-floating-promises": false,
+      "prefer-readonly": false,
+      "directive-selector": [
+          true,
+          "attribute",
+          "app",
+          "camelCase"
+      ],
+      "component-selector": [
+          true,
+          "element",
+          "app",
+          "kebab-case"
+      ]
+  }
+}
