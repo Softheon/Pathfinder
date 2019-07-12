@@ -81,7 +81,7 @@ export class NavfinderComponent implements OnInit, OnDestroy {
         this.pathfinder.path.snapshot$.pipe(take(1))
             .subscribe(x => {
 
-                let step = x.find(s => this.checkPath(s.action, s.actionType, this.router.url));
+                let step = x.find(s => this.checkPath(s.action, s.actionType, this.router.url.replace(`/${this.currentMainStepId}`, '')));
                 if (!step) {
                     step = this.path.steps.find(y => y.id === x[0].id);
                 }
