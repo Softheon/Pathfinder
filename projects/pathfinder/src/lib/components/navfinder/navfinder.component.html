@@ -1,1 +1,13 @@
-<sws-multi-stepper-v [skipAhead]="skipAhead" [stepData]="multiStepperVConfig" [enableToggleIcon]="false"></sws-multi-stepper-v>
+  <mat-tree [dataSource]="dataSource" [treeControl]="treeControl" #treeSelector>
+    <!-- The default node template -->
+    <mat-tree-node [hidden]="true" *matTreeNodeDef="let node"></mat-tree-node>
+    <!-- This is the tree node template for leaf nodes -->
+    <mat-tree-node [ngClass]="determineCompletion(node)" *matTreeNodeDef="let node; when: partOfCurrentGroup" matTreeNodePadding>
+      <button id="node.id + '_button'" (click)="takeAction(node)" p-l-5>{{node.displaySettings.title}}</button>
+    </mat-tree-node>
+    <!-- This is the tree node template for expandable nodes -->
+    <mat-tree-node [ngClass]="determineCompletion(node)" *matTreeNodeDef="let node;when: hasChild" matTreeNodePadding>
+      <i class="fa-lg" [ngClass]="determineIcon(node)" p-r-10></i>
+      <button [id]="node.id + '_button'" (click)="takeAction(node)" h6 m-v-0>{{node.displaySettings.title}}</button>
+    </mat-tree-node>
+  </mat-tree>

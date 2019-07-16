@@ -163,8 +163,8 @@ export class PathfinderService implements OnDestroy {
 
   /** Syncs all the steps current and complete values */
   public syncAllSteps(): void {
+    let currentFound = false;
     for (let step of this.path.steps) {
-      let currentFound = false;
       if (step.id === this.currentStep.id) {
         step.isComplete = false;
         step.isCurrent = true;
@@ -345,13 +345,6 @@ export class PathfinderService implements OnDestroy {
       case 'route': {
         const actionStr = action as string;
         this.router.navigateByUrl(actionStr.replace('.', ''));
-        break;
-      }
-      case 'internalPath': {
-        window.localStorage.setItem(staticPathStorage, JSON.stringify(this.snapshot));
-        const mainStep = this.path.steps.find(s => s.isMainStep && s.group === this.currentStep.group);
-        window.localStorage.setItem(staticMainStepStorage, mainStep.id as string);
-        window.location.href = action;
         break;
       }
       case 'externalUrl': {

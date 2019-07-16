@@ -6,15 +6,6 @@ export class Step {
     /** The id of the step */
     public id: string | number;
 
-    /** The label for the step */
-    public label: string;
-
-    /** True if the step is a main step */
-    public isMainStep: boolean;
-
-    /** The group the step is a part of */
-    public group: string | number;
-
     /** True if the step is a start step */
     public isStart: boolean;
 

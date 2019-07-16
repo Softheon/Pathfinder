@@ -1,3 +1,7 @@
 <div *ngIf="path">
     <pathfinder-nav [skipAhead]="true" [data]="data" [path]="path"></pathfinder-nav>
+    <div>
+        <button sws-button-outline--primary (click)="back()">Back</button>
+        <button sws-button--primary (click)="next()">Next</button>
+    </div>
 </div>

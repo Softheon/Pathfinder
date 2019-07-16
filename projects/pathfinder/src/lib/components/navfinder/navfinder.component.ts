@@ -1,21 +1,24 @@
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
-import { IMultiStepper, IStep } from '@softheon/ng-workshop';
+import { FlatTreeControl } from '@angular/cdk/tree';
+import { Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { MatTree, MatTreeFlatDataSource, MatTreeFlattener } from '@angular/material';
+import { NavigationEnd, Router } from '@angular/router';
 
-import { Subscription } from 'rxjs';
+import { BehaviorSubject, Subscription } from 'rxjs';
 import { take } from 'rxjs/operators';
 
+import { DisplayStep } from '../../models/display-step';
 import { Path } from '../../models/path';
-import { Step } from '../../models/step';
 import { PathfinderService, staticMainStepStorage } from '../../pathfinder.service';
 
 /** The nav finder component */
 @Component({
     selector: 'pathfinder-nav',
     templateUrl: './navfinder.component.html',
-    styleUrls: ['./navfinder.component.css']
+    styleUrls: ['./navfinder.component.scss']
 })
 export class NavfinderComponent implements OnInit, OnDestroy {
+    /** The tree selector */
+    @ViewChild('treeSelector', { static: true }) tree: MatTree<DisplayStep>;
 
     /** The nav text input */
     @Input() public navText: string = 'Navfinder';
@@ -36,10 +39,44 @@ export class NavfinderComponent implements OnInit, OnDestroy {
     public snapshotSubscription: Subscription;
 
     /** The snapshot */
-    public snapshot: Array<Step> = [];
+    public snapshot: Array<DisplayStep> = [];
 
-    /** The multi stepper V config */
-    public multiStepperVConfig: IMultiStepper;
+    /** True if the tree should be shown */
+    public showTree: boolean = false;
+
+    /** The current group */
+    public currentGroup: string;
+
+    // tslint:disable: member-ordering
+    /**
+     * The tree transformer, Robots in disguise
+     * @param step The step in the navigation
+     * @param level The level in the tree
+     */
+    public transformer = (step: DisplayStep): DisplayStep => step;
+
+    /** The tree control */
+    public treeControl = new FlatTreeControl<DisplayStep>(
+        (step: DisplayStep) => step.displaySettings.level,
+        (step: DisplayStep) => step.displaySettings.hasChildren
+    );
+
+    /** The tree flattener */
+    public treeFlattener = new MatTreeFlattener<DisplayStep, DisplayStep>(this.transformer, step => step.displaySettings.level, step => step.displaySettings.hasChildren, () => []);
+
+    /** Gets the data source */
+    public get dataSource(): Array<DisplayStep> {
+        return this.dataStream.value;
+    }
+
+    /** Sets the data source */
+    public set dataSource(value: Array<DisplayStep>) {
+        this.tree.dataSource = new MatTreeFlatDataSource(this.treeControl, this.treeFlattener, value);
+        this.dataStream.next(value);
+    }
+
+    /** The data stream */
+    private dataStream: BehaviorSubject<Array<DisplayStep>> = new BehaviorSubject([]);
 
     /**
      * The constructor
@@ -54,26 +91,81 @@ export class NavfinderComponent implements OnInit, OnDestroy {
     /** Angular life cycle hook for component initialization */
     public ngOnInit(): void {
         this.pathfinder.data = this.data;
-        this.multiStepperVConfig = {
-            menuText: this.navText,
-            steps: []
-        }
         if (!this.pathfinder.staticMode) {
             this.pathfinder.initialize(this.path.steps);
+            const step = this.pathfinder.path.steps.find((s: DisplayStep) => s.displaySettings.level !== 1 && this.checkPath(s.action, s.actionType, this.router.url));
+            this.pathfinder.currentStep = step;
+            this.pathfinder.syncAllSteps();
             this.syncPathByRoute();
         }
         else {
             this.currentMainStepId = window.localStorage.getItem(staticMainStepStorage);
         }
-        this.snapshotSubscription = this.pathfinder.path.snapshot$.subscribe(x => {
-            this.snapshot = x;
-            this.configureNavFromPath();
-        });
+        this.snapshotSubscription = this.pathfinder.path.snapshot$
+            .subscribe((x: Array<DisplayStep>) => {
+                this.showTree = true;
+                this.dataSource = x;
+                this.currentGroup = x.find(y => y.isCurrent).displaySettings.group;
+            });
     }
 
     /** Angular life cycle hook for component destruction */
     public ngOnDestroy(): void {
         this.snapshotSubscription.unsubscribe();
+    }
+
+    /**
+     * Determines if the step has a child and if its a level 1 step
+     * @param _ The step number
+     * @param node The node to check
+     */
+    public hasChild = (_: number, node: DisplayStep) => node.displaySettings.hasChildren || node.displaySettings.level === 1;
+
+    /**
+     * Determines if the node is part of the current group
+     * @param _ The step number
+     * @param node The node to check
+     */
+    public partOfCurrentGroup = (_: number, node: DisplayStep) => node.displaySettings.group === this.currentGroup && node.displaySettings.level !== 1;
+
+    /** Determines the completion */
+    public determineCompletion(step: DisplayStep): string {
+        if (step.displaySettings.level === 1 && step.displaySettings.group === this.currentGroup) {
+            return 'level-1-current';
+        }
+        else if (step.isCurrent) {
+            return 'level-sub-current';
+        }
+        else if (step.isComplete && step.displaySettings.level === 1) {
+            return 'level-1-complete';
+        }
+        else if (step.isComplete) {
+            return 'level-complete';
+        }
+
+        return 'future-level';
+    }
+
+    /**
+     * Determines the icon to use for the given step
+     * @param step The step
+     */
+    public determineIcon(step: DisplayStep): string {
+        const stepCompletion = this.determineCompletion(step);
+        if (stepCompletion === 'level-1-current') {
+            return 'fas fa-arrow-circle-right text-primary';
+        }
+        if (stepCompletion === 'level-1-complete') {
+            return 'far fa-check-circle text-success';
+        }
+
+        return 'fas fa-circle text-regular';
+    }
+
+    public takeAction(step: DisplayStep): void {
+        this.router.navigateByUrl(step.action);
+        this.pathfinder.currentStep = step;
+        this.pathfinder.syncAllSteps();
     }
 
     /** Syncs the path by route */
@@ -108,49 +200,6 @@ export class NavfinderComponent implements OnInit, OnDestroy {
      * @param url The url
      */
     private checkPath(action: string, actionType: string, url: string): boolean {
-        return action && (action.replace('.', '') === url || (actionType === 'internalPath' && action.includes(url.replace('.', ''))));
+        return action && action.includes(url.replace('.', ''));
     }
-
-    /** Configures the navigation from the path */
-    private configureNavFromPath(): void {
-        // reset the steps
-        this.multiStepperVConfig.steps.length = 0;
-
-        // create ISteps from snapshot steps
-        let currentMainStep = -1;
-        let foundCurrent = false;
-        let mainGroup;
-        this.snapshot.forEach(step => {
-            if (step.isMainStep) {
-                // if main step id provided, set the main group
-                if (this.currentMainStepId ? step.id === this.currentMainStepId : false) {
-                    mainGroup = step.group;
-                    console.log(mainGroup);
-                }
-                currentMainStep++;
-            }
-            if (step.id === this.pathfinder.currentStep.id) {
-                foundCurrent = true; 
-            }
-            // if main group is provided don't add a step for non main steps not in the group
-            if (this.currentMainStepId ? step.group === mainGroup || step.isMainStep : true) {
-                let temp;
-                if (step.actionType === 'internalPath') {
-                    temp = (step.action as string).split('/');
-                };
-                let navStep: IStep = {
-                    stepTitle: step.label,
-                    stepUrl: step.actionType === 'internalPath' ? `./${temp[temp.length - 1]}`: (step.actionType === 'route' || step.actionType === 'dummy') ? step.action : undefined,
-                    stepExternalUrl: step.actionType === 'externalUrl' ? step.action : undefined,
-                    stepGroupIndex: currentMainStep,
-                    isSubStep: !step.isMainStep,
-                    isCollapsible: step.isMainStep && this.currentMainStepId ? step.id === this.currentMainStepId : false,
-                    isCurrent: step.id === this.pathfinder.currentStep.id,
-                    isPassed: step.id === this.pathfinder.currentStep.id ? false : !foundCurrent
-                };
-                this.multiStepperVConfig.steps.push(navStep);
-            }
-        });
-    }
-
 }

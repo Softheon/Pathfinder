@@ -1,0 +1,41 @@
+.icon {
+    font-size: 1.5em;
+}
+
+button {
+    background-color: transparent;
+    outline: none;
+    border: none;
+    cursor: pointer;
+}
+
+mat-tree-node {
+    min-height: 35px !important;
+}
+
+.level-1-current {
+    background-color: var(--color-light);
+    button {
+        color: var(--color-primary);
+    }
+}
+
+.level-sub-current {
+    background-color: var(--color-light);
+    button {
+        color: var(--color-primary);
+    }
+}
+
+.level-1-complete {
+    background-color: var(--color-light);
+    button {
+        color: var(--color-regular);
+    }
+}
+
+.level-complete {
+    button {
+        color: var(--color-success);
+    }
+}
