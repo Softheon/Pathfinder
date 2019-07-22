@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { Subscription } from 'rxjs';
+import { Subscription, BehaviorSubject, Observable } from 'rxjs';
 import { take } from 'rxjs/operators';
 
 import { ArrayCondition } from './models/array-condition';
@@ -22,7 +22,7 @@ export const staticMainStepStorage: 'static-main-step' = 'static-main-step';
 @Injectable({
   providedIn: 'root'
 })
-export class PathfinderService implements OnDestroy {
+export class PathfinderService {
 
   /** The current step for the path */
   public currentStep: Step;
@@ -33,14 +33,14 @@ export class PathfinderService implements OnDestroy {
   /** The path */
   public path: Path;
 
-  /** The snapshot subscription */
-  public snapshotSub: Subscription;
-
   /** True if static mode is enabled */
   public staticMode: boolean = false;
 
-  /** the snapshot of the path */
-  private snapshot: Array<Step> = [];
+  /** The observable of the snap shot of the path */
+  public snapshot$: Observable<Path>;
+
+  /** the snapshot behavior subject of the path */
+  private snapshot: BehaviorSubject<Path> = new BehaviorSubject(this.path);
 
   /**
    * The constructor
@@ -50,17 +50,10 @@ export class PathfinderService implements OnDestroy {
     private router: Router
   ) {
     this.router.routeReuseStrategy.shouldReuseRoute = () => { return false; };
-    // subscribe to the snapshot if constructed with path
-    if (this.path) {
-      this.snapshotSub = this.path.snapshot$.subscribe(s => {
-        this.snapshot = s;
-      });
-    }
-  }
 
-  /** Angular life cycle hook called on service destruction */
-  public ngOnDestroy(): void {
-    this.snapshotSub.unsubscribe();
+    // create the observable
+    this.snapshot$ = this.snapshot.asObservable();
+    this.updateSnapshot();
   }
 
   /**
@@ -79,11 +72,6 @@ export class PathfinderService implements OnDestroy {
   public initialize(steps?: Array<Step>, loadFromStorage: boolean = false): void {
     this.path = loadFromStorage ? JSON.parse(window.localStorage.getItem(storageKey)) : new Path(steps);
 
-    // subscribe to the snapshot
-    this.snapshotSub = this.path.snapshot$.subscribe(s => {
-      this.snapshot = s;
-    });
-
     this.currentStep = this.path.steps.find(s => s.isStart);
     if (!this.currentStep) {
       console.error('unable to find start step for current path');
@@ -94,8 +82,8 @@ export class PathfinderService implements OnDestroy {
   /** Takes a step forward in the path */
   public takeStepForward(): Step {
     if (this.staticMode) {
-      const currentIndex = this.snapshot.findIndex(x => x.id === this.currentStep.id);
-      if (currentIndex > -1 && currentIndex < this.snapshot.length - 1) {
+      const currentIndex = this.snapshot.value.steps.findIndex(x => x.id === this.currentStep.id);
+      if (currentIndex > -1 && currentIndex < this.snapshot.value.steps.length - 1) {
         this.currentStep = this.snapshot[currentIndex + 1];
         this.executeAction(this.currentStep.action, this.currentStep.actionType);
       }
@@ -104,11 +92,11 @@ export class PathfinderService implements OnDestroy {
     }
     this.currentStep = this.determineNextStep();
     this.syncAllSteps();
-    this.path.updateSnapshot();
+    this.updateSnapshot();
     while (this.currentStep.actionType === 'dummy') {
       this.currentStep = this.determineNextStep(this.currentStep);
       this.syncAllSteps();
-      this.path.updateSnapshot();
+      this.updateSnapshot();
     }
     this.executeAction(this.currentStep.action, this.currentStep.actionType);
 
@@ -118,25 +106,24 @@ export class PathfinderService implements OnDestroy {
   /** Takes a step backward in the path */
   public takeStepBack(): void {
     if (this.staticMode) {
-      const currentIndex = this.snapshot.findIndex(x => x.id === this.currentStep.id);
+      const currentIndex = this.snapshot.value.steps.findIndex(x => x.id === this.currentStep.id);
       if (currentIndex > 0) {
-        this.currentStep = this.snapshot[currentIndex - 1];
+        this.currentStep = this.snapshot.value.steps[currentIndex - 1];
         this.executeAction(this.currentStep.action, this.currentStep.actionType);
       }
+
       return;
     }
-    this.path.snapshot$.pipe(take(1))
-      .subscribe(val => {
-        let currentSnapIndex = val.findIndex(v => v.id === this.currentStep.id);
-        if (currentSnapIndex === 0) {
-          return;
-        }
-        else if (currentSnapIndex > 0) {
-          this.currentStep = this.getStepById(val[currentSnapIndex - 1].id);
-          this.executeAction(this.currentStep.action, this.currentStep.actionType);
-          this.syncAllSteps();
-        }
-      });
+
+    let currentSnapIndex = this.snapshot.value.steps.findIndex(v => v.id === this.currentStep.id);
+    if (currentSnapIndex === 0) {
+      return;
+    }
+    else if (currentSnapIndex > 0) {
+      this.currentStep = this.getStepById(this.snapshot.value.steps[currentSnapIndex - 1].id);
+      this.executeAction(this.currentStep.action, this.currentStep.actionType);
+      this.syncAllSteps();
+    }
   }
 
   /**
@@ -164,6 +151,9 @@ export class PathfinderService implements OnDestroy {
   /** Syncs all the steps current and complete values */
   public syncAllSteps(): void {
     let currentFound = false;
+    if (!this.currentStep) {
+      this.currentStep = this.path.steps.find(x => x.isStart);
+    }
     for (let step of this.path.steps) {
       if (step.id === this.currentStep.id) {
         step.isComplete = false;
@@ -180,6 +170,9 @@ export class PathfinderService implements OnDestroy {
 
   /** Updates the snapshot of the path */
   public updateSnapshot(): void {
+    if (!this.path || !this.path.steps || this.path.steps.length === 0) {
+      return;
+    }
     let snapshot: Array<Step> = [];
     snapshot.push(this.path.steps.find(s => s.isStart));
     while (snapshot.findIndex(s => s.isEnd) === -1) {
@@ -187,22 +180,19 @@ export class PathfinderService implements OnDestroy {
 
       snapshot.push(this.determineNextStep(step));
     }
-    this.path.updateSnapshot(snapshot);
+    this.snapshot.next(new Path(snapshot));
 
     // save snapshot to local storage
-    window.localStorage.setItem(storageKey, JSON.stringify(this.snapshot));
+    window.localStorage.setItem(storageKey, JSON.stringify(this.snapshot.value));
   }
 
   /** Puts the pathfinder service in static mode */
   public useStaticMode(): void {
     this.staticMode = true;
-    if (this.snapshotSub) {
-      this.snapshotSub.unsubscribe();
-    }
     this.path = new Path(JSON.parse(window.localStorage.getItem(staticPathStorage)));
-    this.snapshot = this.path.steps;
-    this.path.updateSnapshot(this.snapshot);
-    this.currentStep = this.snapshot.find(x => x.isCurrent);
+    this.snapshot.next(this.path);
+    this.updateSnapshot();
+    this.currentStep = this.snapshot.value.steps.find(x => x.isCurrent);
   }
 
   /**
@@ -212,7 +202,7 @@ export class PathfinderService implements OnDestroy {
   private determineNextStep(givenStep?: Step): Step {
     let step = !!givenStep ? givenStep : this.currentStep;
 
-    if (step.isEnd) {
+    if (!step || step.isEnd) {
       return undefined;
     }
 
@@ -240,7 +230,7 @@ export class PathfinderService implements OnDestroy {
           let count = 0;
           let stepIds = c.predicate as Array<string>;
           stepIds.forEach(id => {
-            if (this.snapshot.findIndex(snapStep => snapStep.id === id) > -1) {
+            if (this.snapshot.value.steps.findIndex(snapStep => snapStep.id === id) > -1) {
               count++;
             }
           });

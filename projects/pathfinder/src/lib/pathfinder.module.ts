@@ -3,13 +3,11 @@ import { MatTreeModule, MatIconModule, MatButtonModule, MatExpansionModule } fro
 import { MultiStepperVModule } from '@softheon/ng-workshop';
 import { NavfinderComponent } from './components/navfinder/navfinder.component';
 import { PathfinderService } from './pathfinder.service';
-import { MainStepComponent } from './components/main-step/main-step.component';
-import { SubStepComponent } from './components/sub-step/sub-step.component';
 import { CommonModule } from '@angular/common';
 
 /** The pathfinder module */
 @NgModule({
-  declarations: [NavfinderComponent, MainStepComponent, SubStepComponent],
+  declarations: [NavfinderComponent],
   imports: [
     MultiStepperVModule,
     MatTreeModule,

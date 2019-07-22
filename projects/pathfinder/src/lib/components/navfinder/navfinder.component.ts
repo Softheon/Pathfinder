@@ -94,18 +94,20 @@ export class NavfinderComponent implements OnInit, OnDestroy {
         if (!this.pathfinder.staticMode) {
             this.pathfinder.initialize(this.path.steps);
             const step = this.pathfinder.path.steps.find((s: DisplayStep) => s.displaySettings.level !== 1 && this.checkPath(s.action, s.actionType, this.router.url));
-            this.pathfinder.currentStep = step;
+            this.pathfinder.currentStep = step || this.pathfinder.currentStep || this.pathfinder.path.steps.find(s => s.isStart);
             this.pathfinder.syncAllSteps();
             this.syncPathByRoute();
         }
         else {
             this.currentMainStepId = window.localStorage.getItem(staticMainStepStorage);
         }
-        this.snapshotSubscription = this.pathfinder.path.snapshot$
-            .subscribe((x: Array<DisplayStep>) => {
+        this.snapshotSubscription = this.pathfinder.snapshot$
+            .subscribe((x: Path) => {
+                console.log(x);
+                const steps = x.steps as Array<DisplayStep>;
                 this.showTree = true;
-                this.dataSource = x;
-                this.currentGroup = x.find(y => y.isCurrent).displaySettings.group;
+                this.dataSource = steps;
+                this.currentGroup = steps.find(y => y.isCurrent).displaySettings.group;
             });
     }
 
@@ -170,10 +172,10 @@ export class NavfinderComponent implements OnInit, OnDestroy {
 
     /** Syncs the path by route */
     private syncPathByRoute(): void {
-        this.pathfinder.path.snapshot$.pipe(take(1))
+        this.pathfinder.snapshot$.pipe(take(1))
             .subscribe(x => {
-
-                let step = x.find(s => this.checkPath(s.action, s.actionType, this.router.url.replace(`/${this.currentMainStepId}`, '')));
+                const steps = x.steps;
+                let step = steps.find(s => this.checkPath(s.action, s.actionType, this.router.url.replace(`/${this.currentMainStepId}`, '')));
                 if (!step) {
                     step = this.path.steps.find(y => y.id === x[0].id);
                 }
