@@ -103,7 +103,6 @@ export class NavfinderComponent implements OnInit, OnDestroy {
         }
         this.snapshotSubscription = this.pathfinder.snapshot$
             .subscribe((x: Path) => {
-                console.log(x);
                 const steps = x.steps as Array<DisplayStep>;
                 this.showTree = true;
                 this.dataSource = steps;
